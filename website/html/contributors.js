@@ -104,8 +104,8 @@
         {
             id: "shengbang-tong",
             name: "Shengbang Tong",
-            url: "New York University",
-            affil: "https://tsb0601.github.io/",
+            url: "https://tsb0601.github.io/",
+            affil: "New York University",
         },
         {
             id: "jeroen-van-goey",
