@@ -289,11 +289,28 @@ td.equation-label {
 .algorithmic-content {
   box-sizing: border-box;
   padding-left: var(--algorithm-indent, 0);
-  overflow-wrap: anywhere;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overflow-wrap: normal;
   word-break: normal;
 }
 
 .algorithmic-inline-math {
+  display: inline;
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+  vertical-align: baseline;
+}
+
+.algorithmic-inline-math mjx-container {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.algorithmic-content > .algorithmic-inline-math:only-child {
   display: inline-block;
   max-width: 100%;
   overflow-x: auto;
@@ -303,8 +320,21 @@ td.equation-label {
   -webkit-overflow-scrolling: touch;
 }
 
-.algorithmic-inline-math mjx-container {
+.algorithmic-content > .algorithmic-inline-math:only-child mjx-container {
+  max-width: none;
+}
+
+/* Fallback for pre-normalized algorithm HTML that still wraps a line in span.line. */
+.algorithmic-content > .line {
   display: inline-block;
+  min-width: 100%;
+  max-width: none;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.algorithmic-content > .line .algorithmic-inline-math,
+.algorithmic-content > .line mjx-container {
   max-width: none;
 }
 

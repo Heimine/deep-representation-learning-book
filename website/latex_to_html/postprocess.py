@@ -359,6 +359,7 @@ def normalize_algorithmic_blocks(soup: BeautifulSoup):
     """
     for block in soup.find_all("div", class_="algorithmic"):
         if block.find("div", class_="algorithmic-line"):
+            _repair_existing_algorithmic_rows(soup, block)
             _annotate_algorithmic_math(block)
             continue
 
@@ -392,6 +393,31 @@ def normalize_algorithmic_blocks(soup: BeautifulSoup):
         _annotate_algorithmic_math(block)
 
 
+def _repair_existing_algorithmic_rows(soup: BeautifulSoup, block: Tag):
+    """Repair previously-normalized rows that still contain nested line wrappers."""
+    for row in list(block.find_all("div", class_="algorithmic-line", recursive=False)):
+        if "algorithmic-line-blank" in (row.get("class") or []):
+            continue
+
+        label = row.find("div", class_="algorithmic-label", recursive=False)
+        content = row.find("div", class_="algorithmic-content", recursive=False)
+        if label is None or content is None:
+            continue
+        if label.get_text(" ", strip=True):
+            continue
+        if not _algorithmic_content_needs_repair(content):
+            continue
+
+        nodes: list[Tag | NavigableString] = []
+        for child in list(content.contents):
+            child.extract()
+            nodes.append(child)
+
+        rebuilt_row = _build_algorithmic_row(soup, nodes)
+        if rebuilt_row is not None:
+            row.replace_with(rebuilt_row)
+
+
 def _build_algorithmic_row(
     soup: BeautifulSoup,
     nodes: list[Tag | NavigableString],
@@ -401,20 +427,16 @@ def _build_algorithmic_row(
     if not nodes:
         return None
 
-    label_node: Tag | None = None
-    content_nodes = nodes[:]
-
-    while content_nodes and isinstance(content_nodes[0], NavigableString) and not str(content_nodes[0]).strip():
-        content_nodes.pop(0)
-
-    if content_nodes and isinstance(content_nodes[0], Tag):
-        classes = content_nodes[0].get("class") or []
-        if any(str(cls).startswith("label-") for cls in classes):
-            label_node = content_nodes.pop(0)
-
     flattened_nodes: list[Tag | NavigableString] = []
-    for node in content_nodes:
+    for node in nodes:
         flattened_nodes.extend(_flatten_algorithmic_node(node))
+
+    while flattened_nodes and isinstance(flattened_nodes[0], NavigableString) and not str(flattened_nodes[0]).strip():
+        flattened_nodes.pop(0)
+
+    label_node: Tag | None = None
+    if flattened_nodes and isinstance(flattened_nodes[0], Tag) and _is_algorithmic_label_tag(flattened_nodes[0]):
+        label_node = flattened_nodes.pop(0)
 
     indent_count = _count_leading_algorithmic_whitespace(flattened_nodes)
     _trim_algorithmic_whitespace(flattened_nodes)
@@ -461,7 +483,9 @@ def _flatten_algorithmic_node(node: Tag | NavigableString) -> list[Tag | Navigab
         return [node]
 
     classes = node.get("class") or []
-    if node.name == "span" and "algorithmic" in classes:
+    if node.name == "span" and (
+        "algorithmic" in classes or "line" in classes
+    ):
         flattened: list[Tag | NavigableString] = []
         for child in list(node.contents):
             child.extract()
@@ -469,6 +493,25 @@ def _flatten_algorithmic_node(node: Tag | NavigableString) -> list[Tag | Navigab
         return flattened
 
     return [node]
+
+
+def _is_algorithmic_label_tag(node: Tag) -> bool:
+    """Return True when a tag is the line-number/input-output label span."""
+    classes = node.get("class") or []
+    return any(str(cls) == "label" or str(cls).startswith("label-") for cls in classes)
+
+
+def _algorithmic_content_needs_repair(content: Tag) -> bool:
+    """Detect the older broken row structure emitted by earlier post-processing."""
+    for child in content.contents:
+        if isinstance(child, NavigableString):
+            if child.strip():
+                return False
+            continue
+        if child.name == "span" and "line" in (child.get("class") or []):
+            return True
+        return _is_algorithmic_label_tag(child)
+    return False
 
 
 def _count_leading_algorithmic_whitespace(nodes: list[Tag | NavigableString]) -> int:
